@@ -32,8 +32,10 @@ class Poisson2D:
 
     def create_mesh(self, N):
         """Create 2D mesh and store in self.xij and self.yij"""
-        # self.xij, self.yij ...
-        raise NotImplementedError
+        xi = self.px.create_mesh(self.px.N) #oleb
+        yj = self.py.create_mesh(self.py.N) #oleb
+        self.xij, self.yij = np.meshgrid(xi, yj, indexing='ij', sparse=True) #oleb
+        return self.xij, self.yij #oleb
 
     def D2(self):
         """Return second order differentiation matrix"""
@@ -49,7 +51,7 @@ class Poisson2D:
 
     def assemble(self):
         """Return assembled matrix A and right hand side vector b"""
-        # return A, b
+        #return A, b
         raise NotImplementedError
 
     def l2_error(self, u):
