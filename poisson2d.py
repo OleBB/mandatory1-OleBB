@@ -1,6 +1,7 @@
 import numpy as np
 import sympy as sp
 import scipy.sparse as sparse
+from scipy.interpolate import interpn
 
 x, y = sp.symbols('x,y')
 
@@ -15,9 +16,8 @@ class Poisson2D:
 
     """
 
-    def __init__(self, L, ue):
+    def __init__(self, L , ue):
         """Initialize Poisson solver for the method of manufactured solutions
-
         Parameters
         ----------
         L : number
@@ -32,32 +32,54 @@ class Poisson2D:
 
     def create_mesh(self, N):
         """Create 2D mesh and store in self.xij and self.yij"""
-        xi = self.px.create_mesh(self.px.N) #oleb
-        yj = self.py.create_mesh(self.py.N) #oleb
-        self.xij, self.yij = np.meshgrid(xi, yj, indexing='ij', sparse=True) #oleb
-        return self.xij, self.yij #oleb
+        self.N= N
+        self.h = self.L/self.N
+        x = np.linspace(0, self.L, self.N+1) #filmon
+        y = np.linspace(0, self.L, self.N+1) #filmon
+        self.xij, self.yij = np.meshgrid(x, y, indexing='ij', sparse=True) #filmon
+        return self.xij, self.yij #filmon
 
     def D2(self):
         """Return second order differentiation matrix"""
-        raise NotImplementedError
-
-    def laplace(self):
+        D = sparse.diags([1, -2, 1], [-1, 0, 1], (self.N+1, self.N+1), 'lil') #poisson1
+        D[0, :4] = 2, -5, 4, -1 #poisson1
+        D[-1, -4:] = -1, 4, -5, 2 #poissson1
+        D /= self.h**2 #poisson1
+        return D #poisson1
+    
+    def laplace(self): #oleb: har byttet NxogNy med L
         """Return vectorized Laplace operator"""
-        raise NotImplementedError
-
+        D2 = self.D2 #oleb
+        D2x = self.D2() #lecture 6 #oleb: fjernet også en linje
+        return (sparse.kron(D2x, sparse.eye(self.N+1)) + sparse.kron(sparse.eye(self.N+1), D2x)) #lecture 6 #oleb
+    
     def get_boundary_indices(self):
         """Return indices of vectorized matrix that belongs to the boundary"""
-        raise NotImplementedError
+        B = np.ones((self.N+1, self.N+1), dtype=bool) #poisson2d.py #oleb: vekk med Nx
+        B[1:-1, 1:-1] = 0 #poisson2d.py/lecture 6
+        return np.where(B.ravel() == 1)[0] #poisson2d.py/lecture 6
 
-    def assemble(self):
+    def assemble(self, f=None):
         """Return assembled matrix A and right hand side vector b"""
-        #return A, b
-        raise NotImplementedError
+        A = self.laplace() #poisson2d.py 
+        A = A.tolil() #filmon
+        bnds = self.get_boundary_indices() #poisson2d.py
+        F = sp.lambdify((x, y), self.f)(self.xij, self.yij) # hentet b'n vår
+        b = F.ravel() #flater ut 
+        b[bnds] = sp.lambdify((x, y), self.ue)(self.xij, self.yij).ravel()[bnds]
 
+        for i in bnds: #poisson2d.py
+            A[i] = 0 #poisson2d.py
+            A[i, i] = 1 #poisson2d.py
+        A = A.tocsr() #poisson2d.py
+        #sletta noen linjer
+        return A, b #poisson2d.py
+    
     def l2_error(self, u):
         """Return l2-error norm"""
-        raise NotImplementedError
-
+        ue_exact = sp.lambdify((x,y), self.ue)(self.xij, self.yij)
+        return np.sqrt(self.h*self.h*np.sum((u - ue_exact)**2)) #poisson2d.py #oleb: px.dx ble til h
+   
     def __call__(self, N):
         """Solve Poisson's equation.
 
@@ -115,14 +137,17 @@ class Poisson2D:
         The value of u(x, y)
 
         """
-        raise NotImplementedError
+        punkter = (self.xij[:,0], self.yij[0,:]) #filmon
+        interpoleringspunkter = np.array([x,y]) #filmon
+        u_inter = interpn(punkter, self.U, interpoleringspunkter, method='linear') #filmon
+        return float(u_inter)#filmon
 
 def test_convergence_poisson2d():
     # This exact solution is NOT zero on the entire boundary
     ue = sp.exp(sp.cos(4*sp.pi*x)*sp.sin(2*sp.pi*y))
     sol = Poisson2D(1, ue)
     r, E, h = sol.convergence_rates()
-    assert abs(r[-1]-2) < 1e-2
+    assert abs(r[-1]-2) < 1e-2 
 
 def test_interpolation():
     ue = sp.exp(sp.cos(4*sp.pi*x)*sp.sin(2*sp.pi*y))
@@ -131,3 +156,16 @@ def test_interpolation():
     assert abs(sol.eval(0.52, 0.63) - ue.subs({x: 0.52, y: 0.63}).n()) < 1e-3
     assert abs(sol.eval(sol.h/2, 1-sol.h/2) - ue.subs({x: sol.h/2, y: 1-sol.h/2}).n()) < 1e-3
 
+#if __name__ == '__main__':
+    test_convergence_poisson2d()
+    #test_interpolation()
+
+#FILMON:
+#kjør pytest poisson2d.py
+
+#ue = x
+#L = 1
+#N = 10
+#hei=Poisson2D(L,ue) 
+#emm = hei(10) #N = 10
+#print(emm)
