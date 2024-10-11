@@ -3,6 +3,8 @@ import sympy as sp
 import scipy.sparse as sparse
 import matplotlib.pyplot as plt
 from matplotlib import cm
+import matplotlib.animation as animation
+from matplotlib import rc
 
 x, y, t = sp.symbols('x,y,t')
 
@@ -179,13 +181,27 @@ class Wave2D:
 class Wave2D_Neumann(Wave2D):
 
     def D2(self, N):
-        
-
+        D = sparse.diags([1, -2, 1], [-1, 0, 1], (self.N+1, self.N+1), 'lil')
+        D[0, :2] = -2, 2
+        D[-1, -2:] = 2, -2
+        return D
+    
     def ue(self, mx, my):
-        raise NotImplementedError
+        return sp.cos(mx*sp.pi*x)*sp.cos(my*sp.pi*y)*sp.cos(self.w*t)
 
     def apply_bcs(self):
-        raise NotImplementedError
+        pass
+
+    def animate(self, N, Nt=10, mx=2, my=2):
+        data = self(N, Nt, mx=mx, my=my, store_data = 1)
+        fig, ax = plt.subplots(subplot_kw={'projection':'3d'})
+        frames = []
+        for n, val in data.items():
+            frame = ax.plot_surface(self.xij, self.yij, val, vmin=-0.5*data[0].max(),vmax=data[0].max(),cmap=cm.YlGn,linewidth=0,antialiased=False)
+            frames.append([frame])
+
+        animate = animation.ArtistAnimation(fig, frames, interval=400,blit=True, repeat_delay=1000)
+        animate.save('NeumannWave.gif', writer='pillow', fps=12)
 
 def test_convergence_wave2d():
     sol = Wave2D()
@@ -198,4 +214,11 @@ def test_convergence_wave2d_neumann():
     assert abs(r[-1]-2) < 0.05
 
 def test_exact_wave2d():
-    raise NotImplementedError
+    sol = Wave2D()
+    r, E, h = sol.convergence_rates(m=4,cfl=np.sqrt(2)/2, mx=1,my=1)
+    assert abs(E[-1]) < 1e-6
+
+def Animation():
+    Wave2D_Neumann().animate(32, 48)
+
+Animation() #funkeje?
