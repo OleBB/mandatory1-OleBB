@@ -10,17 +10,26 @@ class Wave2D:
 
     def create_mesh(self, N, sparse=False):
         """Create 2D mesh and store in self.xij and self.yij"""
-        # self.xji, self.yij = ...
-        raise NotImplementedError
+        self.N= N #opg1
+        self.h = self.L/self.N #opg1
+        x = np.linspace(0, self.L, self.N+1) #opg1
+        y = np.linspace(0, self.L, self.N+1) #opg1
+        self.xji, self.yij = np.meshgrid(x, y, indexing='ij', sparse=sparse) #lecture 7  
 
     def D2(self, N):
         """Return second order differentiation matrix"""
-        raise NotImplementedError
+        D = sparse.diags([1, -2, 1], [-1, 0, 1], (self.N+1, self.N+1), 'lil') #wave1D.py
+        D[0, :4] = 2, -5, 4, -1 #lecture 7
+        D[-1, -4:] = -1, 4, -5, 2 #lecture 7
+        D /= self.h**2 #poisson2d.py
+        return D #wave1D.py
 
     @property
     def w(self):
         """Return the dispersion coefficient"""
-        raise NotImplementedError
+        kx = self.mx*self.pi #oppgaveteksten
+        ky = self.my*self.pi #oppgaveteksten sier ky = my*pi
+        return self.c*(kx+ky) #what about plus minus?
 
     def ue(self, mx, my):
         """Return the exact standing wave"""
@@ -36,12 +45,12 @@ class Wave2D:
         mx, my : int
             Parameters for the standing wave
         """
-        raise NotImplementedError
+        Unp1[0] = 0
 
     @property
     def dt(self):
         """Return the time step"""
-        raise NotImplementedError
+        return self.cfl*self.h/self.c #wave1d.py #oleb: dx til h
 
     def l2_error(self, u, t0):
         """Return l2-error norm
@@ -83,7 +92,19 @@ class Wave2D:
         If store_data > 0, then return a dictionary with key, value = timestep, solution
         If store_data == -1, then return the two-tuple (h, l2-error)
         """
-        raise NotImplementedError
+        self.N = N #denne finnes i meshgrid
+        self.cfl = cfl
+        self.Nt = Nt
+        self.c = c 
+        self.mx = mx
+        self.my = my
+        self.store_data = store_data
+        if store_data > 0:
+            return {timestep: solution} #gpt
+        elif store_data == -1:
+            return (self.h, self.l2_error) #gpt
+        else:
+            return ValueError("Invalid value for store_data")
 
     def convergence_rates(self, m=4, cfl=0.1, Nt=10, mx=3, my=3):
         """Compute convergence rates for a range of discretizations
