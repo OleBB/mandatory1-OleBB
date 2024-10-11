@@ -10,26 +10,29 @@ class Wave2D:
 
     def create_mesh(self, N, sparse=False):
         """Create 2D mesh and store in self.xij and self.yij"""
-        self.N= N #opg1
+        self.N = N
+        self.L = 1
         self.h = self.L/self.N #opg1
         x = np.linspace(0, self.L, self.N+1) #opg1
         y = np.linspace(0, self.L, self.N+1) #opg1
-        self.xji, self.yij = np.meshgrid(x, y, indexing='ij', sparse=sparse) #lecture 7  
+        self.xij, self.yij = np.meshgrid(x, y, indexing='ij', sparse=sparse) #lecture 7  
 
     def D2(self, N):
         """Return second order differentiation matrix"""
-        D = sparse.diags([1, -2, 1], [-1, 0, 1], (self.N+1, self.N+1), 'lil') #wave1D.py
+        self.N = N
+        D = sparse.diags([1, -2, 1], [-1, 0, 1], (self.N+1, self.N+1), 'lil') #wave1D.py (men N+1??)
         D[0, :4] = 2, -5, 4, -1 #lecture 7
         D[-1, -4:] = -1, 4, -5, 2 #lecture 7
-        D /= self.h**2 #poisson2d.py
+        D /= self.h**2 #poisson2d.py (filmon/simon?)
         return D #wave1D.py
 
     @property
     def w(self):
         """Return the dispersion coefficient"""
-        kx = self.mx*self.pi #oppgaveteksten
-        ky = self.my*self.pi #oppgaveteksten sier ky = my*pi
-        return self.c*(kx+ky) #what about plus minus?
+        kx = self.mx*np.pi #oppgaveteksten
+        ky = self.my*np.pi #oppgaveteksten sier ky = my*pi
+        k_abs = np.sqrt(kx**2 +ky**2) #simon
+        return self.c*(k_abs) 
 
     def ue(self, mx, my):
         """Return the exact standing wave"""
@@ -45,7 +48,11 @@ class Wave2D:
         mx, my : int
             Parameters for the standing wave
         """
-        Unp1[0] = 0
+        self.N = N
+        self.mx = mx
+        self.my = my
+        self.Unm1, self.Un, self.Unp1 = np.zeros((3, self.N+1, self.N+1)) #oleb endret simon. N+ eller ikke pluss?
+        self.Unm1[:] = sp.lambdify((x, y, t), self.ue(mx, my))(self.xij, self.yij,0)
 
     @property
     def dt(self):
@@ -62,10 +69,17 @@ class Wave2D:
         t0 : number
             The time of the comparison
         """
-        raise NotImplementedError
+        dx = self.L/(self.N)
+        dy = self.L/(self.N)
+        UE = sp.lambdify((x,y,t), self.ue(self.mx,self.my))(self.xij, self.yij,t0)
+        l2_error = np.sqrt(dx*dy*np.sum((UE - u)**2))
+        return l2_error
 
     def apply_bcs(self):
-        raise NotImplementedError
+        self.Unp1[0] = 0
+        self.Unp1[-1] = 0
+        self.Unp1[:, -1] = 0
+        self.Unp1[:, 0] = 0
 
     def __call__(self, N, Nt, cfl=0.5, c=1.0, mx=3, my=3, store_data=-1):
         """Solve the wave equation
@@ -92,19 +106,41 @@ class Wave2D:
         If store_data > 0, then return a dictionary with key, value = timestep, solution
         If store_data == -1, then return the two-tuple (h, l2-error)
         """
-        self.N = N #denne finnes i meshgrid
+        
         self.cfl = cfl
         self.Nt = Nt
         self.c = c 
         self.mx = mx
         self.my = my
         self.store_data = store_data
-        if store_data > 0:
-            return {timestep: solution} #gpt
-        elif store_data == -1:
-            return (self.h, self.l2_error) #gpt
+
+        self.create_mesh(N); #simon
+        self.initialize(N, mx, my) #siomn
+        D = self.D2(N)#/self.h**2 #simon
+        self.Un[:] = self.Unm1[:] + .5*(self.c*self.dt)**2*(D @ self.Unm1 + self.Unm1 @ D.T)
+        
+        plotdata = {0: self.Unm1.copy()};  #simon
+        l2_error = [] #simon
+        t = self.dt #simon
+
+        if store_data == 1:
+            plotdata[1] = self.Un.copy()
+            l2_error.append(self.l2_error(self.Un, t))
+        for n in range(1, Nt):
+            self.Unp1[:] = 2*self.Un - self.Unm1 + (c*self.dt)**2*(D @ self.Un + self.Un @ D.T)
+            # Set boundary conditions
+            self.apply_bcs()
+            # Swap solutions
+            self.Unm1[:] = self.Un
+            self.Un[:] = self.Unp1
+            t += self.dt
+            if n % store_data == 0: #o...
+                plotdata[n] = self.Unm1.copy() #Unm1 blir byttet til Un
+                l2_error.append(self.l2_error(self.Un, t))
+        if store_data == -1: 
+            return self.h, l2_error #gpt
         else:
-            return ValueError("Invalid value for store_data")
+            return plotdata
 
     def convergence_rates(self, m=4, cfl=0.1, Nt=10, mx=3, my=3):
         """Compute convergence rates for a range of discretizations
@@ -131,6 +167,7 @@ class Wave2D:
         h = []
         N0 = 8
         for m in range(m):
+            #debug: print(f"m: {m,}")
             dx, err = self(N0, Nt, cfl=cfl, mx=mx, my=my, store_data=-1)
             E.append(err[-1])
             h.append(dx)
@@ -142,7 +179,7 @@ class Wave2D:
 class Wave2D_Neumann(Wave2D):
 
     def D2(self, N):
-        raise NotImplementedError
+        
 
     def ue(self, mx, my):
         raise NotImplementedError
