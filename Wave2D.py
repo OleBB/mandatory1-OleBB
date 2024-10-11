@@ -25,7 +25,7 @@ class Wave2D:
         D = sparse.diags([1, -2, 1], [-1, 0, 1], (self.N+1, self.N+1), 'lil') #wave1D.py (men N+1??)
         D[0, :4] = 2, -5, 4, -1 #lecture 7
         D[-1, -4:] = -1, 4, -5, 2 #lecture 7
-        D /= self.h**2 #poisson2d.py (filmon/simon?)
+        D /= self.h**2 #poisson2d.py ( / ?)
         return D #wave1D.py
 
     @property
@@ -33,7 +33,7 @@ class Wave2D:
         """Return the dispersion coefficient"""
         kx = self.mx*np.pi #oppgaveteksten
         ky = self.my*np.pi #oppgaveteksten sier ky = my*pi
-        k_abs = np.sqrt(kx**2 +ky**2) #simon
+        k_abs = np.sqrt(kx**2 +ky**2) # 
         return self.c*(k_abs) 
 
     def ue(self, mx, my):
@@ -53,7 +53,7 @@ class Wave2D:
         self.N = N
         self.mx = mx
         self.my = my
-        self.Unm1, self.Un, self.Unp1 = np.zeros((3, self.N+1, self.N+1)) #oleb endret simon. N+ eller ikke pluss?
+        self.Unm1, self.Un, self.Unp1 = np.zeros((3, self.N+1, self.N+1)) #oleb endret  . N+ eller ikke pluss?
         self.Unm1[:] = sp.lambdify((x, y, t), self.ue(mx, my))(self.xij, self.yij,0)
 
     @property
@@ -116,31 +116,30 @@ class Wave2D:
         self.my = my
         self.store_data = store_data
 
-        self.create_mesh(N); #simon
+        self.create_mesh(N); # 
         self.initialize(N, mx, my) #siomn
-        D = self.D2(N)#/self.h**2 #simon
+        D = self.D2(N)#/self.h**2 # 
         self.Un[:] = self.Unm1[:] + .5*(self.c*self.dt)**2*(D @ self.Unm1 + self.Unm1 @ D.T)
         
-        plotdata = {0: self.Unm1.copy()};  #simon
-        l2_error = [] #simon
-        t = self.dt #simon
+        plotdata = {0: self.Unm1.copy()};  # 
+        l2_error = [] # 
+        t = self.dt # 
 
         if store_data == 1:
             plotdata[1] = self.Un.copy()
             l2_error.append(self.l2_error(self.Un, t))
         for n in range(1, Nt):
             self.Unp1[:] = 2*self.Un - self.Unm1 + (c*self.dt)**2*(D @ self.Un + self.Un @ D.T)
-            # Set boundary conditions
+            
             self.apply_bcs()
-            # Swap solutions
             self.Unm1[:] = self.Un
             self.Un[:] = self.Unp1
             t += self.dt
-            if n % store_data == 0: #o...
-                plotdata[n] = self.Unm1.copy() #Unm1 blir byttet til Un
+            if n % store_data == 0: 
+                plotdata[n] = self.Unm1.copy() #Unm1 byttet 
                 l2_error.append(self.l2_error(self.Un, t))
         if store_data == -1: 
-            return self.h, l2_error #gpt
+            return self.h, l2_error 
         else:
             return plotdata
 
@@ -169,7 +168,7 @@ class Wave2D:
         h = []
         N0 = 8
         for m in range(m):
-            #debug: print(f"m: {m,}")
+            print(f"m: {m,}")
             dx, err = self(N0, Nt, cfl=cfl, mx=mx, my=my, store_data=-1)
             E.append(err[-1])
             h.append(dx)
@@ -181,31 +180,38 @@ class Wave2D:
 class Wave2D_Neumann(Wave2D):
 
     def D2(self, N):
+        self.N = N
         D = sparse.diags([1, -2, 1], [-1, 0, 1], (self.N+1, self.N+1), 'lil')
         D[0, :2] = -2, 2
         D[-1, -2:] = 2, -2
+        D = D/self.h**2
         return D
-    
-    def ue(self, mx, my):
-        return sp.cos(mx*sp.pi*x)*sp.cos(my*sp.pi*y)*sp.cos(self.w*t)
+        
 
+    def ue(self, mx, my):
+        ue = sp.cos(mx*sp.pi*x)*sp.cos(my*sp.pi*y)*sp.cos(self.w*t)
+        return ue
+        
     def apply_bcs(self):
         pass
-
-    def animate(self, N, Nt=10, mx=2, my=2):
-        data = self(N, Nt, mx=mx, my=my, store_data = 1)
-        fig, ax = plt.subplots(subplot_kw={'projection':'3d'})
+        
+    def Animate(self, N, Nt = 10, mx = 2, my = 2):
+        data = self(N, Nt, mx = mx, my = my, store_data = 1)
+        fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
         frames = []
         for n, val in data.items():
-            frame = ax.plot_surface(self.xij, self.yij, val, vmin=-0.5*data[0].max(),vmax=data[0].max(),cmap=cm.YlGn,linewidth=0,antialiased=False)
+            
+            frame = ax.plot_surface(self.xij, self.yij, val, vmin=-0.5*data[0].max(),
+                                    vmax=data[0].max(), cmap=cm.YlGn,
+                                    linewidth=0, antialiased=False)
             frames.append([frame])
 
-        animate = animation.ArtistAnimation(fig, frames, interval=400,blit=True, repeat_delay=1000)
+        animate = animation.ArtistAnimation(fig, frames, interval=400, blit=True, repeat_delay=1000)
         animate.save('NeumannWave.gif', writer='pillow', fps=12)
 
 def test_convergence_wave2d():
-    sol = Wave2D()
-    r, E, h = sol.convergence_rates(mx=2, my=3)
+    solD = Wave2D()
+    r, E, h = solD.convergence_rates(mx=2, my=3)
     assert abs(r[-1]-2) < 1e-2
 
 def test_convergence_wave2d_neumann():
@@ -214,11 +220,10 @@ def test_convergence_wave2d_neumann():
     assert abs(r[-1]-2) < 0.05
 
 def test_exact_wave2d():
-    sol = Wave2D()
-    r, E, h = sol.convergence_rates(m=4,cfl=np.sqrt(2)/2, mx=1,my=1)
+    solD = Wave2D()
+    r, E, h = solD.convergence_rates(m = 4, cfl = 1/np.sqrt(2), mx = 1, my = 1)
     assert abs(E[-1]) < 1e-6
 
-def Animation():
-    Wave2D_Neumann().animate(32, 48)
-
-Animation() #funkeje?
+def seeAnimation():
+    Wave2D_Neumann().Animate(32, 48)
+seeAnimation()
